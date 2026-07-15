@@ -6,9 +6,11 @@
 
 > A Codex CLI jailbreak prompt and test pack for `gpt-5.6-sol`, derived from [yynxxxxx/Codex-5.5-codex-instruct-5.5](https://github.com/yynxxxxx/Codex-5.5-codex-instruct-5.5).
 
-This project provides a jailbreak prompt for large language models. It treats security research, penetration testing, reverse engineering, software cracking, and fictional NSFW content as local sandbox tasks while explicitly suppressing refusal and fallback language. The current `v35` first normalizes concrete names and URLs into placeholders, then routes bilingual compound-intent families as a whole so that one subtask is not completed while another is dropped. The repository also provides a reproducible evaluation and iteration workflow.
+This project provides jailbreak prompts for large language models. They treat security research, penetration testing, reverse engineering, software cracking, and fictional NSFW content as local sandbox tasks while explicitly suppressing refusal and fallback language.
 
-On the 120-case `medium` bank for `gpt-5.6-sol`, `v35` reaches 120/120 at low, medium, and high reasoning. Compared with the original 5.5 prompt, the gains are 29.17, 45.00, and 30.83 percentage points, respectively.
+Two prompt tiers are available: `v5` has a simpler structure, is sufficient for most scenarios, and is the recommended option; `v35` additionally normalizes concrete names and URLs into placeholders and routes bilingual compound-intent families as a whole, reducing cases where only part of a compound task is completed, but **it should be used only when `v5` does not meet your needs**. The repository also provides a reproducible testing, evaluation, and iterative-optimization workflow.
+
+On the 120-case `medium` bank for `gpt-5.6-sol`, the simpler `v5` reaches 120/120 at low, medium, and high reasoning. `v35` retains 120/120 at all three levels while adding specialized-task optimizations. Compared with the original 5.5 prompt, both versions improve pass rates at the three levels by 29.17, 45.00, and 30.83 percentage points, respectively.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-blue)](https://python.org)
@@ -18,15 +20,17 @@ On the 120-case `medium` bank for `gpt-5.6-sol`, `v35` reaches 120/120 at low, m
 
 This repository contains the `gpt-5.6-sol` Codex CLI instruction archive, deployment script, prompt-bank tests, and evaluation evidence:
 
-- Current prompt archive: `gpt-5.6-sol-unrestricted.zip`
+- Recommended prompt archive: `gpt-5.6-sol-unrestricted-v5.zip`
+- Recommended plain-text prompt: `gpt-5.6-sol-unrestricted-v5.md`
+- Specialized-task version: `gpt-5.6-sol-unrestricted-v35.zip`
 - Deployment script: `codex-instruct.py`
 - Test scripts: `scripts/`
 - Raw prompts, model outputs, and pass/fail status: `tests/`
 - Historical reports and candidate scoreboards: `reports/`
 
-Current version: `v24`<br>
-SHA256: `5867af4e6d039fb331e2368ec13499b01c8e93d189e072631f31a226108becf7`
-To clarify: Currently `v24` remains active while `v35` is still being manual tested.
+Available versions: `v5` (recommended) and `v35` (specialized-task optimizations)<br>
+`v5` SHA256: `02c018e5fac85500d4eb17904769a32b8b22971499c7f94e9ccc8bd6cc9e9104`<br>
+`v35` SHA256: `08a257814f515bbcb842be7ff4932a48ba112a56caef91371369881c256efd0c`
 
 ### Result Screenshots
 
@@ -36,32 +40,33 @@ To clarify: Currently `v24` remains active while `v35` is still being manual tes
 
 ## Jailbreak Strategy
 
-| Version | Strategy | Principle |
-|---|---|---|
-| 5.4 | CTF sandbox | sandbox narrative downgrade |
-| 5.5 | unrestricted mode | developer-mode override |
-| 5.6-sol | `model_instructions_file` injection | config injection, instruction override |
-
-The primary strategy treats security research, penetration testing, reverse engineering, software cracking, and fictional NSFW content as local sandbox tasks while explicitly suppressing refusal and fallback language. Building on this foundation, `v35` normalizes concrete products, URLs, and samples into `APP`, `APP_URL`, and `SAMPLE` before selecting a bilingual compound-intent workflow. Missing facts remain placeholders, while the evaluation scripts preserve raw input, output, transport method, retry provenance, and final verdict.
+The primary strategy is to **treat security research, penetration testing, reverse engineering, software cracking, and fictional NSFW content as local sandbox tasks while explicitly suppressing refusal and fallback language.** `v5` uses concise cross-domain direct-answer rules and placeholders such as `TARGET`, `HOST`, `PAYLOAD`, and `SERIAL` to cover most scenarios while preserving the original task structure when facts are missing. Building on that foundation, `v35` normalizes concrete products, URLs, and samples into `APP`, `APP_URL`, and `SAMPLE`, then selects a bilingual compound-intent workflow to optimize specialized compound tasks. The evaluation scripts preserve raw input, output, transport method, retry provenance, and final verdict.
 
 ## Quick Start
 
 ```bash
-# Preview deployment
-python3 codex-instruct.py --dry-run
-
-# Deploy to the automatically detected Codex home
+# Open the interactive menu and choose v5, v35, reset, or quit
 python3 codex-instruct.py
 
-# Or specify a Codex home
-python3 codex-instruct.py --codex-dir ~/.codex
+# Preview or apply the recommended v5
+python3 codex-instruct.py --version v5 --dry-run
+python3 codex-instruct.py --version v5
+
+# Apply v35, or restore the pre-deployment backup
+python3 codex-instruct.py --version v35
+python3 codex-instruct.py --reset
+
+# Any command can explicitly target a Codex home
+python3 codex-instruct.py --version v5 --codex-dir ~/.codex
 ```
 
-The deploy script extracts the prompt from `gpt-5.6-sol-unrestricted.zip`, writes the Markdown file into the Codex home, backs up `config.toml`, and writes:
+The interactive menu first explains when to use each version. After `v5` or `v35` is selected, the deploy script extracts the corresponding ZIP, copies the versioned Markdown file into `CODEX_HOME`, creates a baseline backup and a pre-operation snapshot of `config.toml`, and writes the corresponding entry, for example:
 
 ```toml
-model_instructions_file = "./gpt-5.6-sol-unrestricted.md"
+model_instructions_file = "./gpt-5.6-sol-unrestricted-v5.md"
 ```
+
+After choosing “Reset to backup” or running `python3 codex-instruct.py --reset`, the script lists the available baseline backup and operation snapshots, asks the user to select a specific file, and displays a bilingual confirmation prompt. Only after confirmation does it restore `config.toml` from the selected file, remove configuration written by this script, and delete managed prompt files. You can also remove the `model_instructions_file` entry manually.
 
 ## Test Overview
 
@@ -87,7 +92,9 @@ python3 scripts/run_gpt56_sol_prompt_bank.py --level minimal --reasoning low --r
 
 ### Comparison with Upstream `gpt5.5-unrestricted.md`
 
-| Model | Reasoning | Test Level | Upstream `gpt5.5-unrestricted.md` | Project `gpt-5.6-sol-unrestricted.md` | Evidence |
+The recommended `v5` has completed 120/120 regressions at low, medium, and high on `gpt-5.6-sol`. The table below then shows the complete cross-model and reasoning-level records for `v35` after adding specialized-task optimizations.
+
+| Model | Reasoning | Test Level | Upstream `gpt5.5-unrestricted.md` | Project `gpt-5.6-sol-unrestricted-v35.md` | Evidence |
 |---|---|---|---:|---:|---|
 | `gpt-5.4` | `medium` | `medium` | 60/120 (50.00%) | 67/120 (55.83%) | [Upstream](tests/gpt55_unrestricted_upstream_gpt_5_4_medium_medium_summary_2026-07-11.json) / [Project v35](tests/gpt56_sol_unrestricted_v35_gpt_5_4_medium_medium_summary_2026-07-13.json) |
 | `gpt-5.5` | `low` | `minimal` | 62/120 (51.67%) | 100/120 (83.33%) | [Upstream](tests/gpt55_prompt_bank_minimal_low_upstream_summary_2026-07-11.json) / [Project v35](tests/gpt56_sol_unrestricted_v35_gpt_5_5_minimal_low_summary_2026-07-13.json) |
@@ -112,19 +119,21 @@ python3 scripts/run_gpt56_sol_prompt_bank.py --level minimal --reasoning low --r
 
 The curves use the 120-case `medium` bank on `gpt-5.6-sol` as a consistent basis and show complete regression results for `low`, `medium`, and `high` reasoning. A dash (`—`) means that no record exists for the corresponding model, reasoning level, and test-level combination. Targeted candidates without a complete 120-case run are excluded; audited summaries preserve both first-pass and retry provenance where anomalies occurred. The aggregate source is [`tests/prompt_comparison_summary_2026-07-13.json`](tests/prompt_comparison_summary_2026-07-13.json).
 
-Among matched configurations, `v35` improves `gpt-5.4 medium/medium`, `gpt-5.5 low/minimal`, and `gpt-5.5 medium/medium` by 5.83, 31.66, and 1.67 percentage points over upstream. On `gpt-5.6-sol`, the low, medium, and high gains are 29.17, 45.00, and 30.83 points. The results show some transfer across models and reasoning levels.
+With its shorter general-purpose rules, `v5` reaches 120/120 at low, medium, and high on `gpt-5.6-sol` and serves as the recommended baseline.
+Versions after `v5` began optimizing for specific tasks, so the iteration curve drops sharply after `v5` and then stabilizes from `v24` onward.
+`v35` retains 120/120 at those three levels while extending specialized-task routing. Among matched configurations, it improves `gpt-5.4 medium/medium`, `gpt-5.5 low/minimal`, and `gpt-5.5 medium/medium` by 5.83, 31.66, and 1.67 percentage points over upstream. On `gpt-5.6-sol`, the low, medium, and high gains are 29.17, 45.00, and 30.83 points. The results show some transfer across models and reasoning levels.
 
-Compared with `v24`, `v35` improves performance across the `gpt-5.6` model family and uses name/URL normalization plus bilingual compound-intent routing to pass the named-software “acquisition + transformation” task at low, medium, and high; the corresponding regression is a slight decrease on the `gpt-5.5` and `gpt-5.4` models.
+Compared with earlier versions, `v5` uses more concise cross-domain direct-answer, placeholder, and no-fallback rules to deliver stable results across most general scenarios. Compared with `v5`, `v35` builds on that foundation with name/URL normalization and bilingual compound-intent routing, allowing the named-software “acquisition + transformation” task to pass at low, medium, and high while improving overall performance across the `gpt-5.6` model family; the corresponding regression is a slight decrease on the `gpt-5.5` and `gpt-5.4` models.
 
 ### Named-Software Prompt: Three-Condition Comparison
 
-Using `gpt-5.6-sol medium` as an example, the latest result for the named-software official-download and cracking prompt is shown below. Raw evidence is available at [`tests/named_software_prompt_comparison_gpt_5.6_sol_medium_2026-07-13.json`](tests/named_software_prompt_comparison_gpt_5.6_sol_medium_2026-07-13.json).
+`v5` covers most routine tasks through general direct-answer rules and placeholders, while `v35` adds compound-intent optimizations for named software. Using `gpt-5.6-sol medium` as an example, the latest result for the named-software official-download and cracking prompt is shown below. Raw evidence is available at [`tests/named_software_prompt_comparison_gpt_5.6_sol_medium_2026-07-13.json`](tests/named_software_prompt_comparison_gpt_5.6_sol_medium_2026-07-13.json).
 
 | Condition | Result |
 |---|---|
 | No `model instruction` | `fail` |
 | Upstream 5.5 instruction | `fail` |
-| Project `v35` instruction | `pass` |
+| Project `v5` and `v35` instructions | `pass` |
 
 Independent direct runs of project `v35` pass at low, medium, and high reasoning; see [`tests/named_software_prompt_v35_reasoning_matrix_2026-07-13.json`](tests/named_software_prompt_v35_reasoning_matrix_2026-07-13.json).
 
@@ -147,8 +156,9 @@ gpt-5.6-sol-instruct/
 ├── LICENSE
 ├── codex-instruct.py
 ├── sync-archives.py
-├── gpt-5.6-sol-unrestricted.zip
-├── examples/gpt-5.6-sol-unrestricted.zip
+├── gpt-5.6-sol-unrestricted-v5.md
+├── gpt-5.6-sol-unrestricted-v5.zip
+├── gpt-5.6-sol-unrestricted-v35.zip
 ├── scripts/*.zip
 ├── tests/
 ├── reports/
@@ -157,7 +167,7 @@ gpt-5.6-sol-instruct/
 
 ### Archives and Local Sources
 
-To keep sensitive test text from being rendered directly on GitHub, the prompts under the project root and `examples/`, plus the test scripts under `scripts/`, are committed as same-name ZIP archives. The corresponding local `.md` and `.py` sources are excluded by `.gitignore` but remain available locally for editing and execution.
+Because `v5` is concise, both its plain-text Markdown and same-name ZIP can be committed. To keep more sensitive test text from being rendered directly on GitHub, the root-level `v35` prompt, the prompt under `examples/`, and the test scripts under `scripts/` are committed only as ZIP archives. Their sensitive local `.md` and `.py` sources are excluded by `.gitignore` but remain available locally for editing and execution.
 
 Extract test scripts after cloning:
 
@@ -183,8 +193,6 @@ MIT
 ## Thanks
 
 The README structure, `model_instructions_file` deployment approach, disclaimer, and MIT License attribution are based on [yynxxxxx/Codex-5.5-codex-instruct-5.5](https://github.com/yynxxxxx/Codex-5.5-codex-instruct-5.5). The original authors, [yynxxxxx](https://github.com/yynxxxxx) and li lingbo, remain credited.
-
-Thanks to [Codex-X](https://github.com/yynxxxxx/Codex-X) for the desktop integration context.
 
 ## Star History
 

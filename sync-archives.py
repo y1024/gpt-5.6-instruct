@@ -10,7 +10,8 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 PROMPT_RELATIVE_PATHS = (
-    Path("gpt-5.6-sol-unrestricted.md"),
+    Path("gpt-5.6-sol-unrestricted-v5.md"),
+    Path("gpt-5.6-sol-unrestricted-v35.md"),
     Path("examples/gpt-5.6-sol-unrestricted.md"),
 )
 
