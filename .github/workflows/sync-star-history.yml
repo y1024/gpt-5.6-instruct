@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  deployments: write
   pages: write
   id-token: write
 
@@ -182,3 +183,64 @@ jobs:
         if: steps.render.outputs.changed == 'true'
         id: deployment
         uses: actions/deploy-pages@v5
+
+      - name: Delete old GitHub Pages deployment records
+        if: ${{ success() && steps.render.outcome == 'success' }}
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const environment = "github-pages";
+            const deployments = await github.paginate(
+              github.rest.repos.listDeployments,
+              {
+                owner,
+                repo,
+                environment,
+                per_page: 100,
+              },
+            );
+
+            deployments.sort((left, right) => {
+              const timeDifference = Date.parse(right.created_at) - Date.parse(left.created_at);
+              return timeDifference || right.id - left.id;
+            });
+
+            if (deployments.length <= 1) {
+              core.info(`Keeping the only ${environment} deployment record.`);
+              return;
+            }
+
+            const [currentDeployment, ...oldDeployments] = deployments;
+            core.info(
+              `Keeping deployment ${currentDeployment.id} and deleting ${oldDeployments.length} older record(s).`,
+            );
+
+            for (const oldDeployment of oldDeployments) {
+              const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
+                owner,
+                repo,
+                deployment_id: oldDeployment.id,
+                per_page: 1,
+              });
+
+              if (statuses[0]?.state !== "inactive") {
+                await github.rest.repos.createDeploymentStatus({
+                  owner,
+                  repo,
+                  deployment_id: oldDeployment.id,
+                  state: "inactive",
+                  environment,
+                  auto_inactive: false,
+                  description: `Superseded by deployment ${currentDeployment.id}.`,
+                });
+              }
+
+              await github.rest.repos.deleteDeployment({
+                owner,
+                repo,
+                deployment_id: oldDeployment.id,
+              });
+              core.info(`Deleted deployment ${oldDeployment.id}.`);
+            }
