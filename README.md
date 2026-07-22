@@ -1,10 +1,6 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/pojia-logo-dark.svg" />
-  <source media="(prefers-color-scheme: light)" srcset="docs/images/pojia-logo-light.svg" />
-  <img src="docs/images/pojia-logo-light.svg" alt="破甲项目标志" width="640" />
-</picture>
+<img src="docs/images/gpt-5.6-instruct-hero.png" alt="gpt-5.6 破甲提示词及测试包" width="900" />
 
 <p>
   <a href="https://github.com/MDX-Tom/gpt-5.6-instruct/stargazers"><img src="https://img.shields.io/github/stars/MDX-Tom/gpt-5.6-instruct?logo=github&label=Stars" alt="GitHub Stars" /></a>
