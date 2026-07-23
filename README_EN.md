@@ -30,9 +30,9 @@
 
 This project provides jailbreak/bypass prompts for large language models. It frames security research, penetration testing, reverse engineering, software cracking, and fictional NSFW content as local sandbox tasks while explicitly suppressing refusal and fallback language, improving direct execution of complex instructions in Codex CLI.
 
-Two prompt tiers are available. `v5` has a simpler structure, covers most scenarios, and is the recommended default. `v35` additionally normalizes concrete names and URLs into placeholders, then routes bilingual compound-intent families as a whole to reduce partial completion of multi-part tasks. **Use `v35` only when `v5` does not meet your needs.** The project also provides a reproducible workflow for testing, evaluation, and iterative optimization.
+The project now exposes three current entry points. `v5` remains the concise recommended default. The latest `v41` applies compact general normalization, state continuity, error recovery, and real-artifact rules to complex tasks. `v41-skills` adds routing to the vendored upstream Agent Skills. `v35` remains available as the previous specialized release for historical reproduction.
 
-On the 120-case `medium` bank for `gpt-5.6-sol`, the simpler `v5` reaches 120/120 at low, medium, and high reasoning. `v35` retains 120/120 at all three levels while adding specialized-task optimizations. Compared with the original 5.5 prompt, both versions improve pass rates by 29.17, 45.00, and 30.83 percentage points across the three levels, respectively.
+On the original 120-case `medium` bank for `gpt-5.6-sol`, audited aggregates for both `v5` and `v41` are 120/120 at low, medium, and high reasoning. On the new plaintext 52-case/58-turn issue bank, `v41` reaches 52/52 at all three levels. Against `v35`, this is a 25.00-point gain at low/medium and a 23.08-point gain at high, while the base prompt is 55.67% shorter.
 
 <a id="architecture"></a>
 
@@ -41,6 +41,7 @@ On the 120-case `medium` bank for `gpt-5.6-sol`, the simpler `v5` reaches 120/12
 ```mermaid
 flowchart LR
     RELEASE["① Release Layer<br/>v5 · v35 · Custom Archive"]
+    RELEASE["① Release Layer<br/>v5 · v41 · v41-skills · Custom Archive"]
     CONTROL["② Deployment Control<br/>Menu / CLI<br/>Load · Validate · Dry Run"]
     CONFIG["③ Local Configuration<br/>Copy Instruction<br/>Backup · Snapshot · config.toml"]
     RUNTIME["④ Codex Runtime<br/>Codex CLI<br/>Versioned Instruction → gpt-5.6-sol"]
@@ -144,11 +145,15 @@ model_instructions_file = "./gpt-5.6-sol-unrestricted-v5.md"
 ```
 
 To roll back manually, delete or comment out the line above with `#` to restore the model's original default behavior. You can also delete `gpt-5.6-sol-unrestricted-v5.md` or `gpt-5.6-sol-unrestricted-v35.md` to clean up the local files.
+To roll back manually, delete or comment out the line above with `#` to restore the model's original default behavior. You can also remove the deployed versioned Markdown file to clean up local files.
 
-### CCSwitch compatibility
+### Reverse-Proxy Tool Compatibility
+
+<details>
+<summary><strong>Click to expand</strong></summary>
 
 - The previous instruction entry, deployed-file SHA256 values, and whether each file existed before deployment are stored in `CODEX_HOME/.gpt56-sol-instruct-state.json`. Provider, model, URL, and authentication data are not stored there.
-- Provider, model, and authentication changes made by CCSwitch after deployment survive `--reset`.
+- **Provider, model, and authentication settings written after deployment by reverse-proxy tools such as CCSwitch survive `--reset`.**
 - Full `config.toml.bak_<timestamp>` snapshots are for manual emergency recovery only. Restoring the whole configuration requires an explicit `--restore-snapshot` command and confirmation.
 - A legacy `config.toml.gpt56-sol-instruct.bak` is consulted only for the previous `model_instructions_file`; its other settings are never restored automatically.
 - An existing Markdown file not already tracked by the state file is never overwritten; choose another `--name`.

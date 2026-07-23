@@ -30,9 +30,9 @@
 
 本项目提供面向大模型的越狱/破甲提示词，将安全研究、渗透测试、逆向工程、软件破解与 NSFW 虚构内容统一设定为本地沙箱任务，并显式压制拒绝与回退话术，以提升 Codex CLI 对复杂指令的直接执行能力。
 
-项目提供两个等级的提示词：`v5` 结构更简洁，足以覆盖大多数场景，并作为默认推荐版本；`v35` 在此基础上进一步将具体名称与网址归一化为占位符，再按中英文复合意图族进行统一路由，减少复合任务中只完成部分子任务的情况。**建议仅在 `v5` 无法满足需求时使用 `v35`。** 项目同时提供可复现的测试、评测与迭代优化流程。
+项目提供三个当前入口：`v5` 结构简洁，仍作为默认推荐；最新版 `v41` 用更紧凑的通用归一化、状态连续性、纠错恢复与真实工件规则覆盖复杂任务；`v41-skills` 在此基础上增加对项目收录的上游 Agent Skills 的路由。`v35` 作为上一代专项版保留，便于复现历史结果。
 
-在 `gpt-5.6-sol` 的 120 条 `medium` 测试集中，结构更简洁的 `v5` 在 low、medium、high 三档均达到 120/120；`v35` 在保持三档 120/120 的基础上增加了特殊任务优化。两版相较原有 5.5 提示词，在三档的测试通过率分别提升 29.17、45.00 和 30.83 个百分点。
+在 `gpt-5.6-sol` 的原 120 条 `medium` 测试集中，`v5` 与 `v41` 在 low、medium、high 三档的审计汇总均为 120/120。新增 52-case/58-turn 明文专项集中，`v41` 三档均为 52/52；相较 `v35`，low/medium 提升 25.00 个百分点，high 提升 23.08 个百分点，同时基础提示词长度减少 55.67%。
 
 <a id="architecture"></a>
 
@@ -41,6 +41,7 @@
 ```mermaid
 flowchart LR
     RELEASE["① 发布层<br/>v5 · v35 · 自定义包"]
+    RELEASE["① 发布层<br/>v5 · v41 · v41-skills · 自定义包"]
     CONTROL["② 部署控制层<br/>菜单 / CLI<br/>读取 · 校验 · Dry Run"]
     CONFIG["③ 本地配置层<br/>复制指令文件<br/>备份 · 快照 · config.toml"]
     RUNTIME["④ Codex 运行时<br/>Codex CLI<br/>版本化指令 → gpt-5.6-sol"]
@@ -144,11 +145,15 @@ model_instructions_file = "./gpt-5.6-sol-unrestricted-v5.md"
 ```
 
 若要手动回滚，直接删除或用 `#` 注释掉上述行即可恢复模型原始默认行为；可选择手动删除 `gpt-5.6-sol-unrestricted-v5.md` 或 `gpt-5.6-sol-unrestricted-v35.md`，以清理本地文件。
+若要手动回滚，直接删除或用 `#` 注释掉上述行即可恢复模型原始默认行为；也可删除部署的版本化 Markdown 文件以清理本地文件。
 
-### CCSwitch 兼容性
+### 反代工具兼容性
+
+<details>
+<summary><strong>点击查看</strong></summary>
 
 - 部署前的指令项、已部署文件 SHA256 及部署前是否存在记录在 `CODEX_HOME/.gpt56-sol-instruct-state.json`；状态文件不保存 provider、模型、URL 或认证数据。
-- CCSwitch 在部署后写入的 provider、模型和认证配置会在 `--reset` 后保留。
+- **CCSwitch 等反代工具在部署后写入的 provider、模型和认证配置会在 `--reset` 后保留。**
 - 完整 `config.toml.bak_<时间戳>` 快照只用于人工应急恢复；需要恢复整份配置时，必须显式使用 `--restore-snapshot` 并再次确认。
 - 旧版 `config.toml.gpt56-sol-instruct.bak` 只用于找回原有 `model_instructions_file`，其中的其他配置不会自动写回。
 - 已存在且未被状态文件接管的 Markdown 文件不会被覆盖；请使用其他 `--name`。
