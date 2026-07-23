@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import tempfile
-import tomllib
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.8-3.10
+    import tomli as tomllib
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +43,7 @@ class ManagedConfigTests(unittest.TestCase):
         codex_instruct.prepare_deployment_state(
             config_path,
             "gpt-5.6-sol-unrestricted-v5.md",
+            "test instructions\n",
         )
         codex_instruct.set_model_instructions(
             config_path,
@@ -72,6 +78,7 @@ class ManagedConfigTests(unittest.TestCase):
         codex_instruct.prepare_deployment_state(
             config_path,
             "gpt-5.6-sol-unrestricted-v35.md",
+            "test instructions\n",
         )
         codex_instruct.set_model_instructions(
             config_path,
@@ -93,6 +100,7 @@ class ManagedConfigTests(unittest.TestCase):
         codex_instruct.prepare_deployment_state(
             config_path,
             "gpt-5.6-sol-unrestricted-v5.md",
+            "test instructions\n",
         )
         codex_instruct.set_model_instructions(
             config_path,
@@ -132,7 +140,7 @@ class ManagedConfigTests(unittest.TestCase):
         self.addCleanup(temporary_directory.cleanup)
         filename = "custom-prompt.md"
 
-        codex_instruct.prepare_deployment_state(config_path, filename)
+        codex_instruct.prepare_deployment_state(config_path, filename, "custom instructions\n")
         codex_instruct.set_model_instructions(config_path, filename)
         changed, status = codex_instruct.restore_managed_model_instructions(config_path)
 
@@ -177,6 +185,142 @@ class ManagedConfigTests(unittest.TestCase):
         )
 
         self.assertNotIn("\n", updated.replace("\r\n", ""))
+
+    def test_tampered_state_cannot_nominate_config_for_deletion(self) -> None:
+        temporary_directory, config_path = self.make_config(
+            'model_instructions_file = "./gpt-5.6-sol-unrestricted-v5.md"\n'
+        )
+        self.addCleanup(temporary_directory.cleanup)
+        state_path = codex_instruct.state_file_path(config_path)
+        state_path.write_text(
+            json.dumps(
+                {
+                    "version": codex_instruct.STATE_VERSION,
+                    "previous_model_instructions_line": None,
+                    "managed_prompts": {
+                        "config.toml": {
+                            "sha256": "0" * 64,
+                            "existed_before": False,
+                        },
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        args = SimpleNamespace(codex_dir=str(config_path.parent), dry_run=False)
+
+        with patch("builtins.input", return_value="y"):
+            result = codex_instruct.reset_managed_install(args)
+
+        self.assertEqual(result, 0)
+        self.assertTrue(config_path.exists())
+
+    def test_modified_custom_prompt_is_preserved_on_reset(self) -> None:
+        temporary_directory, config_path = self.make_config('model = "gpt-5.5"\n')
+        self.addCleanup(temporary_directory.cleanup)
+        codex_home = config_path.parent
+        source = codex_home / "source.md"
+        source.write_text("deployed content\n", encoding="utf-8")
+        args = SimpleNamespace(codex_dir=str(codex_home), dry_run=False)
+        self.assertEqual(
+            codex_instruct.deploy_prompt(args, source, "custom-prompt.md"),
+            0,
+        )
+        custom_prompt = codex_home / "custom-prompt.md"
+        custom_prompt.write_text("user replacement\n", encoding="utf-8")
+        config_path.write_text(
+            'model_instructions_file = "./personal.md"\n',
+            encoding="utf-8",
+        )
+
+        with patch("builtins.input", return_value="y"):
+            result = codex_instruct.reset_managed_install(args)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(custom_prompt.read_text(encoding="utf-8"), "user replacement\n")
+        self.assertIn("./personal.md", config_path.read_text(encoding="utf-8"))
+
+    def test_atomic_config_update_preserves_symlink(self) -> None:
+        temporary_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary_directory.cleanup)
+        codex_home = Path(temporary_directory.name)
+        target = codex_home / "shared-config.toml"
+        config_path = codex_home / "config.toml"
+        target.write_text('model = "gpt-5.5"\n', encoding="utf-8")
+        config_path.symlink_to(target.name)
+
+        codex_instruct.set_model_instructions(
+            config_path,
+            "gpt-5.6-sol-unrestricted-v5.md",
+        )
+
+        self.assertTrue(config_path.is_symlink())
+        self.assertIn("model_instructions_file", target.read_text(encoding="utf-8"))
+
+    def test_external_path_with_managed_basename_is_not_owned(self) -> None:
+        line = 'model_instructions_file = "/tmp/gpt-5.6-sol-unrestricted-v5.md"'
+        self.assertFalse(
+            codex_instruct.line_references_managed_prompt(
+                line,
+                codex_instruct.MANAGED_PROMPT_FILENAMES,
+            )
+        )
+
+    def test_preexisting_unowned_prompt_is_not_overwritten(self) -> None:
+        temporary_directory, config_path = self.make_config('model = "gpt-5.5"\n')
+        self.addCleanup(temporary_directory.cleanup)
+        codex_home = config_path.parent
+        source = codex_home / "source.md"
+        source.write_text("new content\n", encoding="utf-8")
+        destination = codex_home / "custom-prompt.md"
+        destination.write_text("personal content\n", encoding="utf-8")
+        args = SimpleNamespace(codex_dir=str(codex_home), dry_run=False)
+
+        result = codex_instruct.deploy_prompt(args, source, destination.name)
+
+        self.assertEqual(result, 2)
+        self.assertEqual(destination.read_text(encoding="utf-8"), "personal content\n")
+        self.assertFalse(codex_instruct.state_file_path(config_path).exists())
+
+    def test_explicit_snapshot_restore_keeps_manual_recovery(self) -> None:
+        temporary_directory, config_path = self.make_config(
+            'model_provider = "openai"\n'
+        )
+        self.addCleanup(temporary_directory.cleanup)
+        codex_home = config_path.parent
+        snapshot = codex_home / "config.toml.bak_20260723_010203_000001"
+        snapshot.write_text('model_provider = "custom"\n', encoding="utf-8")
+        args = SimpleNamespace(codex_dir=str(codex_home), dry_run=False)
+
+        with patch("builtins.input", return_value="y"):
+            result = codex_instruct.restore_config_snapshot(args, snapshot)
+
+        self.assertEqual(result, 0)
+        self.assertIn('model_provider = "custom"', config_path.read_text(encoding="utf-8"))
+
+    def test_legacy_preexisting_prompt_is_preserved(self) -> None:
+        filename = "gpt-5.6-sol-unrestricted-v5.md"
+        temporary_directory, config_path = self.make_config(
+            f'model_instructions_file = "./{filename}"\n'
+        )
+        self.addCleanup(temporary_directory.cleanup)
+        codex_home = config_path.parent
+        codex_instruct.baseline_backup_path(config_path).write_text(
+            'model = "gpt-5.5"\n',
+            encoding="utf-8",
+        )
+        destination = codex_home / filename
+        destination.write_text("legacy deployment\n", encoding="utf-8")
+        source = codex_home / "source.md"
+        source.write_text("updated deployment\n", encoding="utf-8")
+        args = SimpleNamespace(codex_dir=str(codex_home), dry_run=False)
+
+        self.assertEqual(codex_instruct.deploy_prompt(args, source, filename), 0)
+        with patch("builtins.input", return_value="y"):
+            self.assertEqual(codex_instruct.reset_managed_install(args), 0)
+
+        self.assertTrue(destination.exists())
+        self.assertEqual(destination.read_text(encoding="utf-8"), "updated deployment\n")
 
 
 if __name__ == "__main__":

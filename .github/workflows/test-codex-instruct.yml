@@ -1,0 +1,45 @@
+name: Test codex-instruct
+
+on:
+  pull_request:
+    paths:
+      - "codex-instruct.py"
+      - "unit_tests/**"
+      - ".github/workflows/test-codex-instruct.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "codex-instruct.py"
+      - "unit_tests/**"
+      - ".github/workflows/test-codex-instruct.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.13"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test compatibility dependency
+        run: python -m pip install tomli
+
+      - name: Compile deployment script and tests
+        run: python -m py_compile codex-instruct.py unit_tests/test_codex_instruct.py
+
+      - name: Run unit tests
+        run: python -m unittest discover -s unit_tests -q
