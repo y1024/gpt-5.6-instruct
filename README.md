@@ -158,6 +158,8 @@ model_instructions_file = "./gpt-5.6-sol-unrestricted-v5.md"
 - 旧版 `config.toml.gpt56-sol-instruct.bak` 只用于找回原有 `model_instructions_file`，其中的其他配置不会自动写回。
 - 已存在且未被状态文件接管的 Markdown 文件不会被覆盖；请使用其他 `--name`。
 
+</details>
+
 <a id="results"></a>
 
 ## 评测结果

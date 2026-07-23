@@ -158,6 +158,8 @@ To roll back manually, delete or comment out the line above with `#` to restore 
 - A legacy `config.toml.gpt56-sol-instruct.bak` is consulted only for the previous `model_instructions_file`; its other settings are never restored automatically.
 - An existing Markdown file not already tracked by the state file is never overwritten; choose another `--name`.
 
+</details>
+
 <a id="results"></a>
 
 ## Evaluation Results
