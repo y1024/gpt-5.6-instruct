@@ -1,5 +1,8 @@
+# Render the official-style Star History charts locally from upstream source, then publish
+# the bilingual README site through Pages without creating chart-update commits.
 name: Deploy README and Star History
 
+# README/image changes deploy immediately; the schedule refreshes star data every 12 hours.
 on:
   push:
     branches:
@@ -14,12 +17,14 @@ on:
     - cron: "23 */12 * * *"
   workflow_dispatch:
 
+# Pages deployment and old deployment-record cleanup require these narrowly scoped permissions.
 permissions:
   contents: read
   deployments: write
   pages: write
   id-token: write
 
+# A newer refresh supersedes an older in-progress render.
 concurrency:
   group: star-history-pages
   cancel-in-progress: true
@@ -43,6 +48,7 @@ jobs:
       - name: Check out this repository
         uses: actions/checkout@v4
 
+      # Use the upstream renderer directly instead of the unstable hosted chart endpoint.
       - name: Check out official Star History source
         uses: actions/checkout@v4
         with:
@@ -94,6 +100,7 @@ jobs:
           umask 077
           printf '%s' "${GITHUB_API_TOKEN}" > "${token_file}"
 
+          # Make upstream token validation target this repository rather than the upstream repo.
           token_source="${STAR_HISTORY_SOURCE_DIR}/backend/token.ts"
           python3 - "${token_source}" <<'PY'
           from pathlib import Path
@@ -111,6 +118,7 @@ jobs:
           path.write_text(source.replace(original, replacement))
           PY
 
+          # Always stop the local backend and remove the temporary token file.
           cleanup() {
             if [[ -n "${server_pid:-}" ]]; then
               kill "${server_pid}" 2>/dev/null || true
@@ -128,6 +136,7 @@ jobs:
           ) >"${server_log}" 2>&1 &
           server_pid=$!
 
+          # Wait for the runner-local renderer; no api.star-history.com/chart call is used.
           for attempt in {1..60}; do
             if curl --fail --silent http://127.0.0.1:8080/healthz >/dev/null; then
               break
@@ -156,6 +165,7 @@ jobs:
             --pages-url "${STAR_HISTORY_PAGES_URL}" \
             --output-dir "${STAR_HISTORY_SITE_DIR}"
 
+          # Skip Pages deployment when the rendered manifest matches the deployed site.
           current_dir="$(mktemp -d)"
           changed=true
           if curl --fail --silent --location \
@@ -184,6 +194,7 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v5
 
+      # Keep the newest Pages deployment record and remove superseded records from GitHub.
       - name: Delete old GitHub Pages deployment records
         if: ${{ success() && steps.render.outcome == 'success' }}
         uses: actions/github-script@v9

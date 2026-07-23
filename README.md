@@ -122,23 +122,36 @@ python3 codex-instruct.py --version v5 --codex-dir ~/.codex
 # 部署自定义 ZIP 或 Markdown
 python3 codex-instruct.py --file ./custom-instructions.zip
 
-# 从备份恢复
+# 安全卸载提示词；只恢复本项目管理的配置项
 python3 codex-instruct.py --reset
+
+# 人工应急：显式恢复整份 config.toml 快照
+python3 codex-instruct.py \
+  --restore-snapshot ~/.codex/config.toml.bak_YYYYMMDD_HHMMSS_ffffff \
+  --codex-dir ~/.codex
 ```
 
 </details>
 
-执行 `--reset` 时，脚本会列出可用备份并要求二次确认，随后恢复配置并清理脚本管理的指令文件。
+执行 `--reset` 时，脚本只恢复部署前的顶层 `model_instructions_file`，不会用旧快照覆盖整个 `config.toml`。脚本仅删除由本次状态记录为新建且 SHA256 未变化的提示词；部署前已存在或后来被用户修改的文件会保留。
 
 ### 手动部署及回滚
 
-解压所选版本，将指令文件复制到 `CODEX_HOME`，备份 `config.toml`，并写入：
+解压所选版本，将指令文件复制到 `CODEX_HOME`，为 `config.toml` 创建操作前快照，并写入：
 
 ```toml
 model_instructions_file = "./gpt-5.6-sol-unrestricted-v5.md"
 ```
 
-若要手动回滚，直接删除或用`#`注释掉上述行即可恢复模型原始默认行为；可选择手动删除 `gpt-5.6-sol-unrestricted-v5.md` 或 `gpt-5.6-sol-unrestricted-v35.md`，以清理本地文件。
+若要手动回滚，直接删除或用 `#` 注释掉上述行即可恢复模型原始默认行为；可选择手动删除 `gpt-5.6-sol-unrestricted-v5.md` 或 `gpt-5.6-sol-unrestricted-v35.md`，以清理本地文件。
+
+### CCSwitch 兼容性
+
+- 部署前的指令项、已部署文件 SHA256 及部署前是否存在记录在 `CODEX_HOME/.gpt56-sol-instruct-state.json`；状态文件不保存 provider、模型、URL 或认证数据。
+- CCSwitch 在部署后写入的 provider、模型和认证配置会在 `--reset` 后保留。
+- 完整 `config.toml.bak_<时间戳>` 快照只用于人工应急恢复；需要恢复整份配置时，必须显式使用 `--restore-snapshot` 并再次确认。
+- 旧版 `config.toml.gpt56-sol-instruct.bak` 只用于找回原有 `model_instructions_file`，其中的其他配置不会自动写回。
+- 已存在且未被状态文件接管的 Markdown 文件不会被覆盖；请使用其他 `--name`。
 
 <a id="results"></a>
 
@@ -183,6 +196,8 @@ gpt-5.6-instruct/
 ├── gpt-5.6-sol-unrestricted-v5.zip    # v5 发布包
 ├── gpt-5.6-sol-unrestricted-v35.zip   # v35 发布包
 ├── scripts/*.zip                      # 可复现评测工具
+├── unit_tests/test_codex_instruct.py  # 部署与回滚单元测试
+├── .github/workflows/test-codex-instruct.yml # Python 3.8/3.13 CI
 └── docs/                              # 中英文对比文档、评测说明与图片
 ```
 

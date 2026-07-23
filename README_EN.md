@@ -122,23 +122,36 @@ python3 codex-instruct.py --version v5 --codex-dir ~/.codex
 # Deploy a custom ZIP or Markdown file
 python3 codex-instruct.py --file ./custom-instructions.zip
 
-# Restore from a backup
+# Safely uninstall the prompt; restore only project-managed settings
 python3 codex-instruct.py --reset
+
+# Manual emergency recovery: explicitly restore a full config.toml snapshot
+python3 codex-instruct.py \
+  --restore-snapshot ~/.codex/config.toml.bak_YYYYMMDD_HHMMSS_ffffff \
+  --codex-dir ~/.codex
 ```
 
 </details>
 
-With `--reset`, the script lists available backups and asks for confirmation before restoring the configuration and removing managed instruction files.
+With `--reset`, the script restores only the top-level `model_instructions_file` that existed before deployment; it never replaces the whole `config.toml` with an old snapshot. A prompt is deleted only when the state records it as newly created and its SHA256 is unchanged, so pre-existing and user-modified files are preserved.
 
 ### Manual Deployment and Rollback
 
-Extract the selected version, copy the instruction file to `CODEX_HOME`, back up `config.toml`, and add:
+Extract the selected version, copy the instruction file to `CODEX_HOME`, create a pre-operation snapshot of `config.toml`, and add:
 
 ```toml
 model_instructions_file = "./gpt-5.6-sol-unrestricted-v5.md"
 ```
 
 To roll back manually, delete or comment out the line above with `#` to restore the model's original default behavior. You can also delete `gpt-5.6-sol-unrestricted-v5.md` or `gpt-5.6-sol-unrestricted-v35.md` to clean up the local files.
+
+### CCSwitch compatibility
+
+- The previous instruction entry, deployed-file SHA256 values, and whether each file existed before deployment are stored in `CODEX_HOME/.gpt56-sol-instruct-state.json`. Provider, model, URL, and authentication data are not stored there.
+- Provider, model, and authentication changes made by CCSwitch after deployment survive `--reset`.
+- Full `config.toml.bak_<timestamp>` snapshots are for manual emergency recovery only. Restoring the whole configuration requires an explicit `--restore-snapshot` command and confirmation.
+- A legacy `config.toml.gpt56-sol-instruct.bak` is consulted only for the previous `model_instructions_file`; its other settings are never restored automatically.
+- An existing Markdown file not already tracked by the state file is never overwritten; choose another `--name`.
 
 <a id="results"></a>
 
@@ -183,6 +196,8 @@ gpt-5.6-instruct/
 ├── gpt-5.6-sol-unrestricted-v5.zip    # v5 release archive
 ├── gpt-5.6-sol-unrestricted-v35.zip   # v35 release archive
 ├── scripts/*.zip                      # Reproducible evaluation tools
+├── unit_tests/test_codex_instruct.py  # Deployment and rollback unit tests
+├── .github/workflows/test-codex-instruct.yml # Python 3.8/3.13 CI
 └── docs/                              # Bilingual comparisons, methodology, and images
 ```
 
