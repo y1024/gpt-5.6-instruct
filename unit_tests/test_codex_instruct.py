@@ -31,6 +31,7 @@ class ManagedConfigTests(unittest.TestCase):
         config_path.write_text(text, encoding="utf-8")
         return temporary_directory, config_path
 
+    # Reset removes only the managed instruction entry and preserves later CCSwitch settings.
     def test_reset_preserves_ccswitch_provider_change(self) -> None:
         temporary_directory, config_path = self.make_config(
             'model_provider = "custom"\n'
@@ -68,6 +69,7 @@ class ManagedConfigTests(unittest.TestCase):
         self.assertTrue(restored["features"]["web_search"])
         self.assertNotIn("model_instructions_file", restored)
 
+    # A pre-existing top-level instruction line, including its comment, survives deploy/reset.
     def test_round_trip_restores_previous_instruction_entry(self) -> None:
         original_line = 'model_instructions_file = "./personal-instructions.md" # keep me'
         temporary_directory, config_path = self.make_config(
@@ -90,6 +92,7 @@ class ManagedConfigTests(unittest.TestCase):
         self.assertEqual(status, "restored")
         self.assertIn(original_line, config_path.read_text(encoding="utf-8"))
 
+    # Assignments inside TOML tables are not mistaken for the managed top-level field.
     def test_nested_assignment_is_not_rewritten(self) -> None:
         nested_line = 'model_instructions_file = "nested-value.md"'
         temporary_directory, config_path = self.make_config(
@@ -112,6 +115,7 @@ class ManagedConfigTests(unittest.TestCase):
         self.assertEqual(text.count(nested_line), 1)
         self.assertNotIn("gpt-5.6-sol-unrestricted-v5.md", text)
 
+    # Legacy backups contribute only the prior instruction entry, never stale provider data.
     def test_legacy_baseline_migrates_only_previous_instruction(self) -> None:
         temporary_directory, config_path = self.make_config(
             'model_provider = "openai"\n'
@@ -135,6 +139,7 @@ class ManagedConfigTests(unittest.TestCase):
         self.assertEqual(restored["model_instructions_file"], "./personal.md")
         self.assertNotIn("model_providers", restored)
 
+    # Custom prompt names are recorded so their managed config entry can be removed safely.
     def test_custom_prompt_filename_is_tracked(self) -> None:
         temporary_directory, config_path = self.make_config('model = "gpt-5.5"\n')
         self.addCleanup(temporary_directory.cleanup)
@@ -148,6 +153,7 @@ class ManagedConfigTests(unittest.TestCase):
         self.assertEqual(status, "removed")
         self.assertNotIn("model_instructions_file", config_path.read_text(encoding="utf-8"))
 
+    # End-to-end reset removes owned artifacts while retaining a later provider selection.
     def test_full_reset_removes_state_and_prompt_without_reverting_provider(self) -> None:
         temporary_directory, config_path = self.make_config(
             'model_provider = "custom"\nmodel = "gpt-5.5"\n'
@@ -177,6 +183,7 @@ class ManagedConfigTests(unittest.TestCase):
         self.assertFalse((codex_home / "custom-prompt.md").exists())
         self.assertFalse(codex_instruct.state_file_path(config_path).exists())
 
+    # Editing a CRLF config must not introduce mixed line endings.
     def test_crlf_line_endings_are_preserved(self) -> None:
         text = 'model = "gpt-5.5"\r\n[features]\r\nweb_search = true\r\n'
         updated = codex_instruct.replace_top_level_model_instructions(
@@ -186,6 +193,7 @@ class ManagedConfigTests(unittest.TestCase):
 
         self.assertNotIn("\n", updated.replace("\r\n", ""))
 
+    # An invalid state file cannot nominate config.toml or another non-Markdown file for deletion.
     def test_tampered_state_cannot_nominate_config_for_deletion(self) -> None:
         temporary_directory, config_path = self.make_config(
             'model_instructions_file = "./gpt-5.6-sol-unrestricted-v5.md"\n'
@@ -215,6 +223,7 @@ class ManagedConfigTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertTrue(config_path.exists())
 
+    # A user-replaced prompt fails the recorded SHA256 check and must be preserved.
     def test_modified_custom_prompt_is_preserved_on_reset(self) -> None:
         temporary_directory, config_path = self.make_config('model = "gpt-5.5"\n')
         self.addCleanup(temporary_directory.cleanup)
@@ -240,6 +249,7 @@ class ManagedConfigTests(unittest.TestCase):
         self.assertEqual(custom_prompt.read_text(encoding="utf-8"), "user replacement\n")
         self.assertIn("./personal.md", config_path.read_text(encoding="utf-8"))
 
+    # Atomic config writes follow a trusted config symlink instead of replacing the link itself.
     def test_atomic_config_update_preserves_symlink(self) -> None:
         temporary_directory = tempfile.TemporaryDirectory()
         self.addCleanup(temporary_directory.cleanup)
@@ -257,6 +267,7 @@ class ManagedConfigTests(unittest.TestCase):
         self.assertTrue(config_path.is_symlink())
         self.assertIn("model_instructions_file", target.read_text(encoding="utf-8"))
 
+    # A matching basename outside CODEX_HOME is not treated as a script-owned prompt.
     def test_external_path_with_managed_basename_is_not_owned(self) -> None:
         line = 'model_instructions_file = "/tmp/gpt-5.6-sol-unrestricted-v5.md"'
         self.assertFalse(
@@ -266,6 +277,7 @@ class ManagedConfigTests(unittest.TestCase):
             )
         )
 
+    # Deployment refuses to overwrite a destination that is not already tracked as owned.
     def test_preexisting_unowned_prompt_is_not_overwritten(self) -> None:
         temporary_directory, config_path = self.make_config('model = "gpt-5.5"\n')
         self.addCleanup(temporary_directory.cleanup)
@@ -282,6 +294,7 @@ class ManagedConfigTests(unittest.TestCase):
         self.assertEqual(destination.read_text(encoding="utf-8"), "personal content\n")
         self.assertFalse(codex_instruct.state_file_path(config_path).exists())
 
+    # Full-file recovery remains available only through the explicit snapshot command.
     def test_explicit_snapshot_restore_keeps_manual_recovery(self) -> None:
         temporary_directory, config_path = self.make_config(
             'model_provider = "openai"\n'
@@ -298,6 +311,7 @@ class ManagedConfigTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertIn('model_provider = "custom"', config_path.read_text(encoding="utf-8"))
 
+    # Legacy deployments preserve prompt files that existed before ownership tracking.
     def test_legacy_preexisting_prompt_is_preserved(self) -> None:
         filename = "gpt-5.6-sol-unrestricted-v5.md"
         temporary_directory, config_path = self.make_config(
